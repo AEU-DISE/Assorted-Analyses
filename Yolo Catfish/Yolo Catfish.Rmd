@@ -1,0 +1,82 @@
+---
+title: "Yolo Catfish"
+author: "Nicole Kwan"
+date: '2022-11-28'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+# bring in data
+```{r}
+#total catch with all details
+integrated_wq_totalcatch <- read_csv("C:/Repositories/publish_fish_2022update/data_clean/integrated_wq_totalcatch.csv")
+
+#merge event and fish lenght data
+event <- read_csv("C:/Repositories/publish_fish_2022update/data_clean/event.csv")
+fish_unique <- read_csv("C:/Repositories/publish_fish_2022update/data_clean/fish_unique.csv")
+integrated_length <- merge(event, fish_unique, by="EventID")
+```
+
+# total catch and cpue over time
+```{r}
+#create year column
+integrated_wq_totalcatch$Year <- format(as.Date(integrated_wq_totalcatch$SampleDate, format="%Y-%m-%d"),"%Y")
+
+catfish_total <- filter(integrated_wq_totalcatch, OrganismCode %in% c("WHC", "CHC", "BRB", "BKB"))
+
+catfish_yr <- catfish_total %>% 
+  group_by(Year, OrganismCode, MethodCode) %>% 
+  summarize("TotalCount"= sum(Count), "TotalVolume"=sum(SeineVolume), "TotalHours"=sum(TrapHours))
+
+ggplot(data=catfish_yr, aes(x=Year, y=TotalCount)) + 
+  geom_col(aes(fill=MethodCode), color="black") +
+  facet_wrap(~OrganismCode, scales = "free") + #note free y axis scale
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray70", "gray50", "gray30")) +
+  scale_y_continuous(name="Count") +
+  scale_x_discrete(name= "Year")
+
+ggsave("Yolo Catfish/annualcount.png", dpi=250, height=6, width=10, units="in")
+
+#calculate CPUE
+catfish_yr_cpue <- catfish_yr %>%
+   mutate(CPUE = ifelse(MethodCode == "BSEIN", TotalCount/TotalVolume,
+                      ifelse(MethodCode %in% c("RSTR", "FKTR") & Year>=2010, TotalCount/TotalHours, NA)))
+
+ggplot(data=catfish_yr_cpue, aes(x=Year, y=CPUE)) + 
+  geom_col(color="black") +
+  facet_wrap(~MethodCode + OrganismCode, scales = "free") + #note free y axis scale
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("gray70", "gray50", "gray30", "gray10")) +
+  scale_y_continuous(name="CPUE") +
+  scale_x_discrete(name= "Year")
+
+ggsave("Yolo Catfish/annualcpue.png", dpi=250, height=8, width=14, units="in")
+```
+
+# length frequency histograms
+```{r}
+#filter to just catfish
+##didn't inlclude YEB since only 16 caught overall, none since 2011
+catfish_length <- filter(integrated_length, OrganismCode %in% c("WHC", "CHC", "BRB", "BKB"))
+
+ggplot(data=catfish_length, aes(x=ForkLength)) + 
+  geom_histogram(aes(fill=MethodCode), color="black") +
+  facet_wrap(~OrganismCode, scales = "free") + #note free y axis scale
+  theme_bw() +
+  scale_fill_manual(values = c("gray70", "gray50", "gray30")) +
+  scale_y_continuous(name="Number of Fish") +
+  scale_x_continuous(name= "Fork Length (mm)")
+
+ggsave("Yolo Catfish/lengthhist.png", dpi=250, height=6, width=8, units="in")
+```
+
